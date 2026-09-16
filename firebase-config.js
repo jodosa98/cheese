@@ -6,5 +6,6 @@ window.FIREBASE_CONFIG = {
   storageBucket: "cheese-2c4ee.firebasestorage.app",
   messagingSenderId: "90115547549",
   appId: "1:90115547549:web:d45ae06c412b25523a4f74",
-  webClientId: "90115547549-32mt188l4r2kf65uckbpkqnso9v3nkc0.apps.googleusercontent.com"
+  webClientId: "90115547549-32mt188l4r2kf65uckbpkqnso9v3nkc0.apps.googleusercontent.com",
+  siteUrl: "https://jodosa98.github.io/cheese/"
 };
