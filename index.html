@@ -140,6 +140,18 @@
   #search-results .rd { color: var(--muted); font-size: 11px; }
   #search-results .pref { color: var(--muted); font-size: 11px; margin-left: auto; white-space: nowrap; }
 
+  /* 폰 전용 검색 화면 */
+  #sov { position: fixed; inset: 0; z-index: 65; background: var(--panel); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
+  .sov-head { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .sov-back { width: 36px; height: 36px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; font-size: 18px; }
+  .sov-slot { flex: 1; }
+  .sov-body { flex: 1; overflow: auto; padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 80px); }
+  .sov-hint { font-size: 12px; color: var(--muted); margin: 8px 4px; }
+  #sov #search-results { position: static; box-shadow: none; border: 0; max-height: none; padding: 0; }
+  #sov #search-results li { border-bottom: 1px solid var(--line); }
+  #sov #search-results li button { padding: 12px 8px; font-size: 15px; flex-wrap: wrap; }
+  #sov #search-results .rd { font-size: 12px; }
+
   /* prefecture tree */
   #tree { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 4px 10px 10px; list-style: none; }
   #tree > li { margin: 0; border-bottom: 1px solid var(--line); }
@@ -515,6 +527,10 @@
     </div>
   </div>
 </div>
+<div id="sov" hidden role="dialog" aria-modal="true" aria-label="검색">
+  <div class="sov-head"><button class="sov-back" id="sov-back" aria-label="뒤로">←</button><div class="sov-slot" id="sov-slot"></div></div>
+  <div class="sov-body" id="sov-body"><p class="sov-hint">도도부현·시구정촌 이름을 한국어·영어·일본어로 검색하세요. 띄어쓰기로 좁힐 수 있어요 — 예: "오사카 주오", "tokyo shinjuku"</p></div>
+</div>
 <div id="undo" hidden></div>
 <div id="toast" hidden></div>
 
@@ -747,7 +763,7 @@
     if (u.isPref) { zoomToPref(u.p); return; }
     zoomToBounds(u.bounds, 40);
     flash(u);
-    if (withPop) { const r = wrap.getBoundingClientRect(); setTimeout(() => showPop(u, { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }), 550); }
+    if (withPop) { const r = wrap.getBoundingClientRect(); setTimeout(() => showPop(u, { clientX: r.left + r.width / 2, clientY: r.top + 12 }), 550); }
   }
 
   // ---------- painting ----------
@@ -907,7 +923,7 @@
     if (e.target.matches('input, textarea')) return;
     if (/^[0-5]$/.test(e.key)) { brush = +e.key; renderBrushes(); }
     if (e.key === 'c' || e.key === 'C') { brush = 'cycle'; renderBrushes(); }
-    if (e.key === 'Escape') { hidePop(); hideResults(); closeInfo(); document.getElementById('achv').hidden = true; document.getElementById('logv').hidden = true; }
+    if (e.key === 'Escape') { hidePop(); hideResults(); if (window.closeSearchOverlay) window.closeSearchOverlay(false); closeInfo(); document.getElementById('achv').hidden = true; document.getElementById('logv').hidden = true; }
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undoLast(); }
   });
   document.getElementById('legend').innerHTML = LEVELS.map(l => `<span><i class="dot" style="background:${color(l.v)}"></i>${l.v} ${l.kr} <span class="ja" style="color:var(--muted)">${l.jp}</span></span>`).join('');
@@ -1024,10 +1040,35 @@
       prefHits.map(p => `<li><button data-prefhit="${p.code}"><i class="dot" style="background:${color(prefLevel(p))}"></i><span class="ja">${p.name}</span><span class="rd">${p.kr} · ${p.en}</span><span class="pref">도도부현</span></button></li>`).join('') +
       top.map(u => `<li><button data-code="${u.code}"><i class="dot" style="background:${color(lvOf(u.code))}"></i><span class="ja">${u.label}</span><span class="rd">${u.rdShort}</span><span class="pref ja">${u.prefName}</span></button></li>`).join('');
     resultsEl.hidden = false;
-    resultsEl.querySelectorAll('[data-code]').forEach(b => b.addEventListener('click', () => { hideResults(); goToUnit(unitByCode.get(b.dataset.code), true); }));
-    resultsEl.querySelectorAll('[data-prefhit]').forEach(b => b.addEventListener('click', () => { hideResults(); zoomToPref(prefs.find(p => p.code === b.dataset.prefhit)); }));
+    resultsEl.querySelectorAll('[data-code]').forEach(b => b.addEventListener('click', () => { hideResults(); if (window.closeSearchOverlay) window.closeSearchOverlay(true); if (window.__sheet && window.__sheet.isMobile()) window.__sheet.collapse(); goToUnit(unitByCode.get(b.dataset.code), true); }));
+    resultsEl.querySelectorAll('[data-prefhit]').forEach(b => b.addEventListener('click', () => { hideResults(); if (window.closeSearchOverlay) window.closeSearchOverlay(true); if (window.__sheet && window.__sheet.isMobile()) window.__sheet.collapse(); zoomToPref(prefs.find(p => p.code === b.dataset.prefhit)); }));
   });
-  document.addEventListener('click', e => { if (!e.target.closest('#search-wrap')) hideResults(); });
+  document.addEventListener('click', e => { if (!e.target.closest('#search-wrap') && !e.target.closest('#sov')) hideResults(); });
+  // 폰: 검색창을 누르면 전체 화면 검색으로 전환 (키보드·뒤로가기 버튼과 겹치지 않게)
+  const sov = document.getElementById('sov'), sovSlot = document.getElementById('sov-slot'), sovBody = document.getElementById('sov-body');
+  const searchWrap = document.getElementById('search-wrap');
+  const mobileMQ = window.matchMedia('(max-width: 760px)');
+  let sovOpen = false;
+  function openSearchOverlay() {
+    if (sovOpen || !mobileMQ.matches) return;
+    sovOpen = true;
+    sovSlot.appendChild(searchEl); sovBody.appendChild(resultsEl);
+    sov.hidden = false;
+    setTimeout(() => searchEl.focus(), 0);
+  }
+  function closeSearchOverlay(keepText) {
+    if (!sovOpen) return;
+    sovOpen = false;
+    searchEl.blur();
+    searchWrap.appendChild(searchEl); searchWrap.appendChild(resultsEl);
+    sov.hidden = true; hideResults();
+    if (!keepText) searchEl.value = '';
+  }
+  window.closeSearchOverlay = closeSearchOverlay;
+  searchEl.addEventListener('focus', () => { if (mobileMQ.matches && !sovOpen) openSearchOverlay(); });
+  searchEl.addEventListener('pointerdown', () => { if (mobileMQ.matches && !sovOpen) openSearchOverlay(); });
+  document.getElementById('sov-back').addEventListener('click', () => closeSearchOverlay(false));
+  searchEl.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = resultsEl.querySelector('button:not([disabled])'); if (b) b.click(); } });
 
   // ---------- info dialog ----------
   const info = document.getElementById('info');
@@ -1521,6 +1562,7 @@
     };
     C.nativeCallback('App', 'addListener', { eventName: 'backButton' }, () => {
       // 1) 열린 창이 있으면 닫기
+      if (window.closeSearchOverlay && !document.getElementById('sov').hidden) { window.closeSearchOverlay(false); return; }
       for (const id of ['errbox', 'acct', 'logv', 'achv', 'info', 'welcome', 'pop', 'tip']) {
         const el = document.getElementById(id);
         if (el && !el.hidden && getComputedStyle(el).display !== 'none') { el.hidden = true; if (id === 'errbox') el.remove(); return; }
