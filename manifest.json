@@ -1,0 +1,17 @@
+{
+  "name": "チーズ — 일본 시구정촌 방문 지도",
+  "short_name": "チーズ",
+  "description": "일본 1,902개 시구정촌을 6단계로 칠하는 나만의 방문 지도",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#edf0e9",
+  "theme_color": "#F6EFDD",
+  "lang": "ko",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
