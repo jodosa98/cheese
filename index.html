@@ -931,6 +931,7 @@
       let unsub = null;
       const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
       const FA = isNative && window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin('FirebaseAuthentication') : null;
+      let gisClient = null;
       btnIn.addEventListener('click', async () => {
         if (FA) {
           try {
@@ -941,9 +942,33 @@
           } catch (e) { setStatus('Google 로그인에 실패했어요 — 앱에 Firebase 설정이 아직 없거나 취소되었어요'); }
           return;
         }
+        // 웹: Google Identity Services(토큰 방식) 우선 — GitHub Pages처럼 authDomain과 다른 도메인에서도 폰 브라우저에서 동작
+        if (gisClient) {
+          try { gisClient.requestAccessToken({ prompt: '' }); return; } catch (e) { /* fall through */ }
+        }
         try { await auth.signInWithPopup(a, provider); }
-        catch (e) { try { await auth.signInWithRedirect(a, provider); } catch (e2) { setStatus('로그인에 실패했어요 — 잠시 후 다시 시도해 주세요'); } }
+        catch (e) { setStatus('로그인에 실패했어요 — 팝업이 차단되었는지 확인하고 다시 시도해 주세요'); }
       });
+      // GIS 준비 (webClientId가 있을 때만)
+      if (!FA && cfg.webClientId) {
+        try {
+          await new Promise((res, rej) => {
+            if (window.google && window.google.accounts) return res();
+            const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.defer = true;
+            s.onload = res; s.onerror = rej; document.head.appendChild(s);
+          });
+          gisClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: cfg.webClientId,
+            scope: 'openid email profile',
+            callback: async resp => {
+              if (!resp || !resp.access_token) { setStatus('로그인이 취소되었어요'); return; }
+              try { await auth.signInWithCredential(a, auth.GoogleAuthProvider.credential(null, resp.access_token)); }
+              catch (e) { setStatus('로그인에 실패했어요 — 잠시 후 다시 시도해 주세요'); }
+            },
+            error_callback: err => { if (err && err.type !== 'popup_closed') setStatus('로그인 창을 열지 못했어요 — 팝업 차단을 풀고 다시 시도해 주세요'); },
+          });
+        } catch (e) { gisClient = null; }
+      }
       btnOut.addEventListener('click', async () => { try { if (FA) await FA.signOut(); } catch (e) { /* ignore */ } auth.signOut(a); });
       const btnDel = document.getElementById('btn-delete-account');
       let delArmed = false, delTimer = null;
