@@ -855,10 +855,13 @@
   const resultsEl = document.getElementById('search-results');
   function hideResults() { resultsEl.hidden = true; }
   searchEl.addEventListener('input', () => {
-    const q = norm(searchEl.value);
-    if (!q) { hideResults(); return; }
-    const prefHits = prefs.filter(p => p.hay.includes(q)).slice(0, 5);
-    const hits = units.filter(u => u.hay.includes(q));
+    // 띄어쓰기로 나눈 단어가 모두 포함되면 일치 (예: "오사카시 주오쿠", "chiba chuo", "大阪 中央")
+    const words = searchEl.value.split(/[\s,、，]+/).map(norm).filter(Boolean);
+    if (!words.length) { hideResults(); return; }
+    const q = words[words.length - 1]; // 순위 계산은 마지막 단어(가장 구체적인 이름) 기준
+    const matchAll = hay => words.every(w => hay.includes(w));
+    const prefHits = prefs.filter(p => matchAll(p.hay)).slice(0, 5);
+    const hits = units.filter(u => matchAll(u.hay));
     // rank: name/reading matches before prefecture-only matches
     const score = u => {
       const names = [u.name, u.han, u.roma, u.kana].map(norm);
@@ -1357,6 +1360,32 @@
     mq.addEventListener('change', init); window.addEventListener('resize', () => { if (mq.matches && panel.classList.contains('collapsed')) apply(COLLAPSED); }); init();
     // when the map is tapped on a phone, tuck the sheet down so the map gets room
     document.getElementById('map').addEventListener('pointerdown', () => { if (mq.matches && panel.getBoundingClientRect().height > window.innerHeight * 0.6) apply(snaps()[1]); });
+    window.__sheet = { isMobile: () => mq.matches, isCollapsed: () => panel.classList.contains('collapsed'), collapse: () => apply(COLLAPSED) };
+  })();
+
+  // ---------- Android 뒤로가기 (APK) ----------
+  (function () {
+    const C = window.Capacitor;
+    if (!(C && C.isNativePlatform && C.isNativePlatform() && C.nativeCallback)) return;
+    let exitArmed = 0, exitEl = null;
+    const showExitHint = () => {
+      if (!exitEl) { exitEl = document.createElement('div'); exitEl.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9999;background:rgba(28,34,29,.92);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.25);white-space:nowrap'; document.body.appendChild(exitEl); }
+      exitEl.textContent = '한 번 더 누르면 앱이 종료됩니다'; exitEl.hidden = false;
+      setTimeout(() => { if (Date.now() - exitArmed >= 1900) exitEl.hidden = true; }, 2000);
+    };
+    C.nativeCallback('App', 'addListener', { eventName: 'backButton' }, () => {
+      // 1) 열린 창이 있으면 닫기
+      for (const id of ['errbox', 'acct', 'logv', 'achv', 'info', 'welcome', 'pop', 'tip']) {
+        const el = document.getElementById(id);
+        if (el && !el.hidden && getComputedStyle(el).display !== 'none') { el.hidden = true; if (id === 'errbox') el.remove(); return; }
+      }
+      // 2) 시트가 올라와 있으면 내리기
+      if (window.__sheet && window.__sheet.isMobile() && !window.__sheet.isCollapsed()) { window.__sheet.collapse(); return; }
+      // 3) 두 번 눌러 종료
+      const now = Date.now();
+      if (now - exitArmed < 2000) { C.nativePromise('App', 'exitApp', {}); return; }
+      exitArmed = now; showExitHint();
+    });
   })();
 
   // ---------- boot ----------
