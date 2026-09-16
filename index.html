@@ -20,6 +20,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
 <style>
+  [hidden] { display: none !important; }
   :root {
     --ground: #edf0e9;
     --panel: #f9faf7;
@@ -197,6 +198,13 @@
   .pref-mesh { fill: none; stroke: var(--pref-border); stroke-width: .9; vector-effect: non-scaling-stroke; pointer-events: none; }
   .inset-frame { fill: none; stroke: var(--line-strong); stroke-width: .8; vector-effect: non-scaling-stroke; stroke-dasharray: 3 3; }
   .inset-lab { font-size: 11px; fill: var(--muted); font-family: "Noto Sans JP", sans-serif; }
+  #labels { pointer-events: none; font-family: "Noto Sans JP", "Noto Sans KR", sans-serif; }
+  #labels text { fill: #1c221d; paint-order: stroke; stroke: rgba(255,255,255,.92); stroke-width: .28em; stroke-linejoin: round; text-anchor: middle; font-weight: 600; }
+  #labels .lab-p text, #labels .lab-r text { fill: #3a4a3e; font-weight: 700; letter-spacing: .04em; }
+  #labels .lab-r .kr { font-size: .65em; font-weight: 500; fill: #4c5a4f; }
+  #labels .lab-p .kr, #labels .lab-u .kr { font-size: .72em; font-weight: 500; fill: #4c5a4f; }
+  #labels .off { display: none; }
+  #map-ctl button[aria-pressed="false"] { opacity: .45; }
 
   #tip {
     position: absolute; pointer-events: none; background: var(--panel); color: var(--ink);
@@ -222,6 +230,13 @@
   #pop .p-row .sw { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(0,0,0,.18); }
   #pop .p-close { position: absolute; top: 4px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 4px; }
 
+  #mode { position: absolute; left: 12px; top: 12px; z-index: 4; display: flex; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel); overflow: hidden; font-size: 12px; }
+  #mode button { border: 0; background: none; padding: 6px 11px; color: var(--ink-2); }
+  #mode button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  #map.pref-mode .unit { stroke-width: 0; }
+  #map.pref-mode .pref-mesh { stroke-width: 1.4px; }
+  #brush-hint { font-size: 11px; color: var(--muted); width: 100%; }
+  #brush-hint:empty { display: none; }
   #map-ctl { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 4px; z-index: 4; }
   #map-ctl button { width: 32px; height: 32px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; font-size: 16px; line-height: 1; }
   #legend {
@@ -342,6 +357,7 @@
     #tree { flex: 1; min-height: 0; overflow: auto; }
     #legend { display: none; }
     #map-ctl { top: env(safe-area-inset-top, 0px); margin-top: 12px; }
+    #mode { top: env(safe-area-inset-top, 0px); margin-top: 12px; }
     .brush-row { grid-template-columns: repeat(8, 1fr); }
     #panel-foot { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
     #undo { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 12px; transform: none; max-width: calc(100vw - 72px); }
@@ -382,6 +398,7 @@
     <div id="brushes">
       <p class="sec-lab"><span>브러시</span><span class="hint">선택: 누르면 카드에서 단계 입력 · 숫자키 0–5</span></p>
       <div class="brush-row" id="brush-row" role="group" aria-label="방문 단계 브러시"></div>
+      <div id="brush-hint"></div>
     </div>
 
     <div id="search-wrap">
@@ -405,10 +422,12 @@
 
   <div id="map-wrap">
     <svg id="map" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet" role="img" aria-label="일본 시구정촌 방문 지도"></svg>
+    <div id="mode" role="group" aria-label="지도 종류"><button data-m="muni" aria-pressed="true">시구정촌</button><button data-m="pref" aria-pressed="false">도도부현</button></div>
     <div id="map-ctl">
       <button id="z-in" title="확대" aria-label="확대">+</button>
       <button id="z-out" title="축소" aria-label="축소">−</button>
       <button id="z-reset" title="전체 보기" aria-label="전체 보기">⌂</button>
+      <button id="z-lab" title="지명 표시 켜기/끄기" aria-label="지명 표시" aria-pressed="true">あ</button>
     </div>
     <div id="legend"></div>
     <div id="tip" hidden></div>
@@ -548,6 +567,7 @@
     return u;
   });
   const unitByCode = new Map(units.map(u => [u.code, u]));
+  const prefPseudo = new Map(); // 도도부현 전체(도도부현 지도용) 가상 항목 — 변경 기록·되돌리기용
   const prefs = [];
   {
     const seen = new Map();
@@ -560,6 +580,7 @@
       seen.get(u.pref).units.push(u);
     });
     prefs.sort((a, b) => a.code.localeCompare(b.code));
+    prefs.forEach(p => { const ps = { code: 'P' + p.code, pref: p.code, name: p.name + ' 전체', label: p.name + ' 전체', prefName: p.kr, han: p.kr, isPref: true, p }; prefPseudo.set(ps.code, ps); unitByCode.set(ps.code, ps); });
   }
   const MUNI_MAX = units.length * 5;
 
@@ -568,7 +589,10 @@
   let ach = {};              // achievement id -> unlockedAt (ms)
   let log = [];              // change history: {t, c, f, v}
   let visits = {};           // code -> ['YYYY-MM-DD', ...] (sorted)
-  let notes = {};            // code -> short memo
+  let notes = {};           // code -> short memo
+  let plevels = {};         // 도도부현 코드 -> 직접 칠한 단계 (도도부현 지도용)
+  let mapMode = 'muni';     // 'muni' | 'pref'
+  const normP = o => { const out = {}; if (o && typeof o === 'object') Object.entries(o).forEach(([c, v]) => { if (/^\d{2}$/.test(c) && v >= 1 && v <= 5) out[c] = +v; }); return out; };
   const normVisits = obj => { const out = {}; if (!obj || typeof obj !== 'object') return out; Object.entries(obj).forEach(([c, v]) => { const arr = (Array.isArray(v) ? v : [v]).filter(x => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x)); if (arr.length) out[c] = [...new Set(arr)].sort(); }); return out; };
   const visitsOf = code => visits[code] || [];
   const lastVisit = code => { const a = visitsOf(code); return a.length ? a[a.length - 1] : ''; };
@@ -577,7 +601,7 @@
   let brush = 'pick';        // 'pick' (default: tap opens the card) | 'cycle' | 0..5
   let db = null, dbDoc = null, downloads = null;
   let writing = false, dirty = false, saveTimer = null;
-  const lvOf = code => levels[code] || 0;
+  const lvOf = code => code[0] === 'P' ? (plevels[code.slice(1)] || 0) : (levels[code] || 0);
 
   // ---------- projections ----------
   const W = 1000, H = 1000;
@@ -614,11 +638,92 @@
   const meshGeo = topojson.mesh(topo, topo.objects.m, (a, b) => a !== b && a.properties.c.slice(0, 2) !== b.properties.c.slice(0, 2));
   gMesh.append('path').attr('class', 'pref-mesh').attr('d', d3.geoPath(projMain)(meshGeo));
 
+  // ---------- 지명 라벨 (도도부현 → 확대하면 시구정촌) ----------
+  const gLabels = g.append('g').attr('id', 'labels');
+  let labelsOn = true; try { labelsOn = localStorage.getItem('cheese-labels') !== '0'; } catch (e) { /* ignore */ }
+  const prefLabels = prefs.filter(p => p.code !== '47').map(p => {
+    const path = d3.geoPath(projMain);
+    let A = 0, cx = 0, cy = 0;
+    p.units.filter(u => !isOga(u)).forEach(u => { const a = Math.abs(path.area(u.f)); const c = path.centroid(u.f); if (isFinite(c[0])) { A += a; cx += c[0] * a; cy += c[1] * a; } });
+    return { p, x: cx / A, y: cy / A, name: p.name, kr: p.kr };
+  });
+  units.forEach(u => { const c = d3.geoPath(projOf(u)).centroid(u.f); u.cx = c[0]; u.cy = c[1]; });
+  const REGION_LABELS = [['北海道', '홋카이도', ['01']], ['東北', '도호쿠', ['02','03','04','05','06','07']], ['関東', '간토', ['08','09','10','11','12','13','14']], ['中部', '주부', ['15','16','17','18','19','20','21','22','23']], ['近畿', '긴키', ['24','25','26','27','28','29','30']], ['中国', '주고쿠', ['31','32','33','34','35']], ['四国', '시코쿠', ['36','37','38','39']], ['九州', '규슈', ['40','41','42','43','44','45','46']]]
+    .map(([name, kr, codes]) => { const pts = prefLabels.filter(l => codes.includes(l.p.code)); return { name, kr, x: d3.mean(pts, l => l.x), y: d3.mean(pts, l => l.y) }; });
+  const labR = gLabels.selectAll('g.lab-r').data(REGION_LABELS).join('g').attr('class', 'lab-r').attr('transform', d => `translate(${d.x},${d.y})`);
+  labR.append('text').attr('class', 'jp').text(d => d.name);
+  labR.append('text').attr('class', 'kr').attr('dy', '1.05em').text(d => d.kr);
+  const labP = gLabels.selectAll('g.lab-p').data(prefLabels).join('g').attr('class', 'lab-p').attr('transform', d => `translate(${d.x},${d.y})`);
+  labP.append('text').attr('class', 'jp').text(d => d.name);
+  labP.append('text').attr('class', 'kr').attr('dy', '1.05em').text(d => d.kr);
+  const labU = gLabels.selectAll('g.lab-u').data(units).join('g').attr('class', 'lab-u off').attr('transform', u => `translate(${u.cx},${u.cy})`);
+  labU.append('text').attr('class', 'jp').text(u => u.name);
+  labU.append('text').attr('class', 'kr').attr('dy', '1.05em').text(u => u.han);
+  let curT = d3.zoomIdentity, labRaf = 0;
+  const unitLabState = new Map();
+  // 라벨 충돌 회피: 우선순위 높은 것부터 놓고, 겹치는 라벨은 숨김
+  units.forEach(u => { u.area = Math.abs(d3.geoPath(projOf(u)).area(u.f)); });
+  const unitsByArea = units.slice().sort((a, b) => b.area - a.area);
+  prefLabels.forEach(l => { l.area = d3.sum(l.p.units, u => u.area); });
+  const prefByArea = prefLabels.slice().sort((a, b) => b.area - a.area);
+  const labPNode = new Map(labP.nodes().map((n, i) => [prefLabels[i].p.code, n]));
+  const labUNode = new Map(labU.nodes().map((n, i) => [units[i].code, n]));
+  const labRNodes = labR.nodes();
+  const CJK_W = 1.0;
+  function updateLabels() {
+    labRaf = 0;
+    if (!labelsOn) { gLabels.attr('display', 'none'); return; }
+    gLabels.attr('display', null);
+    const k = curT.k, node = svg.node(), sw = node.clientWidth || 1000, sh = node.clientHeight || 1000;
+    const s = Math.min(sw, sh) / 1000;            // svg 단위 → 화면 px
+    const fpx = 11;                                 // 기준 글자 크기(화면 px)
+    gLabels.style('font-size', (fpx / (k * s)) + 'px');
+    const ox = (sw - 1000 * s) / 2, oy = (sh - 1000 * s) / 2;
+    const toX = x => ox + (x * k + curT.x) * s, toY = y => oy + (y * k + curT.y) * s;
+    const placed = [];
+    const fits = (X, Y, w, h) => {
+      if (X < -w || X > sw + w || Y < -h || Y > sh + h) return false;
+      const r = { x0: X - w / 2 - 2, y0: Y - h * 0.45, x1: X + w / 2 + 2, y1: Y + h * 0.75 };
+      for (const q of placed) if (r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0) return false;
+      placed.push(r); return true;
+    };
+    const boxW = (jp, kr, em, krEm) => Math.max(jp.length * fpx * em * CJK_W, (kr || '').length * fpx * em * krEm * 0.95);
+    const showRegion = k < 1.7, showPref = !showRegion && (k < 5 || mapMode === 'pref');
+    // 지방
+    const rEm = 1.15;
+    labR.style('font-size', rEm + 'em');
+    REGION_LABELS.forEach((d, i) => { const on = showRegion && fits(toX(d.x), toY(d.y), boxW(d.name, d.kr, rEm, 0.65), fpx * rEm * 2.0); labRNodes[i].classList.toggle('off', !on); });
+    // 도도부현 (큰 현부터)
+    const pEm = Math.min(1.5, 1 + (k - 1) * 0.1);
+    labP.style('font-size', pEm + 'em');
+    prefByArea.forEach(l => { const on = showPref && fits(toX(l.x), toY(l.y), boxW(l.name, l.kr, pEm, 0.72), fpx * pEm * 2.0); labPNode.get(l.p.code).classList.toggle('off', !on); });
+    // 시구정촌 (넓은 곳부터) — 화면에서 충분히 크게 보이는 것만
+    const minK = 2.2, muniOK = k >= minK && mapMode !== 'pref';
+    unitsByArea.forEach(u => {
+      let on = false;
+      if (muniOK) {
+        const b = u.bounds;
+        const bw = (b[1][0] - b[0][0]) * k * s, bh = (b[1][1] - b[0][1]) * k * s;
+        const w = boxW(u.name, u.han, 1, 0.72);
+        if (bw >= w * 0.85 && bh >= 24) on = fits(toX(u.cx), toY(u.cy), w, fpx * 2.0);
+      }
+      if (unitLabState.get(u.code) !== on) { unitLabState.set(u.code, on); labUNode.get(u.code).classList.toggle('off', !on); }
+    });
+  }
+  const scheduleLabels = () => { if (!labRaf) labRaf = requestAnimationFrame(updateLabels); };
+  const btnLab = document.getElementById('z-lab');
+  btnLab.setAttribute('aria-pressed', labelsOn ? 'true' : 'false');
+  btnLab.addEventListener('click', () => { labelsOn = !labelsOn; btnLab.setAttribute('aria-pressed', labelsOn ? 'true' : 'false'); try { localStorage.setItem('cheese-labels', labelsOn ? '1' : '0'); } catch (e) { /* ignore */ } scheduleLabels(); });
+  window.addEventListener('resize', scheduleLabels);
+
   const zoom = d3.zoom().scaleExtent([1, 60]).on('zoom', ev => {
     g.attr('transform', ev.transform);
+    curT = ev.transform;
     unitSel.style('stroke-opacity', Math.min(1, 0.35 + ev.transform.k * 0.12));
     hidePop();
+    scheduleLabels();
   });
+  scheduleLabels();
   svg.call(zoom).on('dblclick.zoom', null);
   d3.select('#z-in').on('click', () => svg.transition().duration(250).call(zoom.scaleBy, 1.6));
   d3.select('#z-out').on('click', () => svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.6));
@@ -635,6 +740,7 @@
   const zoomToPref = p => zoomToBounds(unionBounds(p.units), 14);
   function flash(u) { unitSel.classed('hl', x => x === u); setTimeout(() => unitSel.classed('hl', false), 2500); }
   function goToUnit(u, withPop) {
+    if (u.isPref) { zoomToPref(u.p); return; }
     zoomToBounds(u.bounds, 40);
     flash(u);
     if (withPop) { const r = wrap.getBoundingClientRect(); setTimeout(() => showPop(u, { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }), 550); }
@@ -649,22 +755,26 @@
     v = +v; opts = opts || {};
     const from = lvOf(code);
     if (from === v) return;
-    if (v === 0) delete levels[code]; else levels[code] = v;
+    const isP = code[0] === 'P', pc = isP ? code.slice(1) : null;
+    if (isP) { if (v === 0) delete plevels[pc]; else plevels[pc] = v; }
+    else { if (v === 0) delete levels[code]; else levels[code] = v; }
     updatedAt = Date.now();
     if (opts.log !== false) { log.push({ t: updatedAt, c: code, f: from, v }); if (log.length > 500) log = log.slice(-500); showUndo(code, from, v); }
-    flashChange(code);
-    unitSel.filter(u => u.code === code).attr('fill', color(v));
+    if (isP) paintMap();
+    else { flashChange(code); if (mapMode === 'pref') paintMap(); else unitSel.filter(u => u.code === code).attr('fill', color(v)); }
     renderStats();
-    const u = unitByCode.get(code);
-    renderPrefRow(u.pref);
-    refreshUnitRow(code);
+    renderPrefRow(isP ? pc : unitByCode.get(code).pref);
+    if (!isP) refreshUnitRow(code);
     scheduleAchievements();
     persist();
   }
 
   unitSel
-    .on('click', (ev, u) => { ev.stopPropagation(); if (brush === 'pick') { showPop(u, ev); return; } setLevel(u.code, brush === 'cycle' ? (lvOf(u.code) + 1) % 6 : brush); if (TOUCH) showTip(u, ev, true); else if (!tip.hidden) showTip(u, ev); })
-    .on('mousemove', (ev, u) => { if (!TOUCH) showTip(u, ev); })
+    .on('click', (ev, u) => {
+      ev.stopPropagation();
+      if (mapMode === 'pref') { const p = prefOf(u.pref), pc = 'P' + p.code; if (brush === 'pick') { showPrefPop(p, ev); return; } setLevel(pc, brush === 'cycle' ? (lvOf(pc) + 1) % 6 : brush); return; }
+      if (brush === 'pick') { showPop(u, ev); return; } setLevel(u.code, brush === 'cycle' ? (lvOf(u.code) + 1) % 6 : brush); if (TOUCH) showTip(u, ev, true); else if (!tip.hidden) showTip(u, ev); })
+    .on('mousemove', (ev, u) => { if (!TOUCH && mapMode !== 'pref') showTip(u, ev); })
     .on('mouseleave', () => { if (!TOUCH) tip.hidden = true; });
   svg.on('click', () => hidePop());
 
@@ -739,6 +849,37 @@
     pop.querySelector('.p-close').addEventListener('click', hidePop);
     tip.hidden = true;
   }
+  function showPrefPop(p, ev) {
+    const pc = 'P' + p.code, cur = lvOf(pc), mx = p.units.reduce((m, u) => Math.max(m, lvOf(u.code)), 0);
+    pop.innerHTML = `<button class="p-close" aria-label="닫기">×</button>
+      <div class="p-name"><small>도도부현 전체</small><span class="ja">${p.name}</span><span class="rd">${p.kr} · ${p.en}</span></div>
+      <div class="p-row">${LEVELS.map(l => `<button data-v="${l.v}" aria-pressed="${l.v === cur}" title="${l.desc}"><i class="sw" style="background:${color(l.v)}"></i>${l.kr}</button>`).join('')}</div>
+      <div class="p-visits"><span class="lab">${mx ? `시구정촌 기록 기준 최고 단계: <b>${byLevel[mx].kr}</b> — 두 지도 중 높은 쪽으로 표시돼요` : '이 현에는 아직 시구정촌 기록이 없어요'}</span></div>`;
+    pop.hidden = false;
+    const r = wrap.getBoundingClientRect();
+    let x = ev.clientX - r.left + 12, y = ev.clientY - r.top + 12;
+    if (x + pop.offsetWidth > r.width - 8) x = Math.max(8, r.width - pop.offsetWidth - 8);
+    if (y + pop.offsetHeight > r.height - 8) y = Math.max(8, ev.clientY - r.top - pop.offsetHeight - 12);
+    pop.style.left = x + 'px'; pop.style.top = y + 'px';
+    pop.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); setLevel(pc, b.dataset.v); pop.querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', x === b)); }));
+    pop.querySelector('.p-close').addEventListener('click', hidePop);
+    tip.hidden = true;
+  }
+  function paintMap() {
+    if (mapMode === 'pref') { const c = {}; prefs.forEach(p => { c[p.code] = color(prefLevel(p)); }); unitSel.attr('fill', u => c[u.pref]); }
+    else unitSel.attr('fill', u => color(lvOf(u.code)));
+  }
+  function flashPref(pc) {
+    unitSel.filter(u => u.pref === pc).classed('changed', false).each(function () { void this.getBoundingClientRect(); }).classed('changed', true);
+  }
+  function setMapMode(m) {
+    mapMode = m; try { localStorage.setItem('cheese-mapmode', m); } catch (e) { /* ignore */ }
+    svg.classed('pref-mode', m === 'pref');
+    document.querySelectorAll('#mode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m));
+    document.getElementById('brush-hint').textContent = m === 'pref' ? '도도부현 지도: 현을 누르면 현 전체가 칠해져요 · 시구정촌 기록과 연동됩니다' : '';
+    hidePop(); tip.hidden = true; paintMap(); if (typeof scheduleLabels === 'function') scheduleLabels();
+  }
+  document.querySelectorAll('#mode button').forEach(b => b.addEventListener('click', () => setMapMode(b.dataset.m)));
   function hidePop() { pop.hidden = true; }
   makeDraggable(pop, { parent: wrap });
 
@@ -768,7 +909,7 @@
   document.getElementById('legend').innerHTML = LEVELS.map(l => `<span><i class="dot" style="background:${color(l.v)}"></i>${l.v} ${l.kr} <span class="ja" style="color:var(--muted)">${l.jp}</span></span>`).join('');
 
   // ---------- stats ----------
-  const prefLevel = p => p.units.reduce((m, u) => Math.max(m, lvOf(u.code)), 0);
+  const prefLevel = p => Math.max(plevels[p.code] || 0, p.units.reduce((m, u) => Math.max(m, lvOf(u.code)), 0));
   const prefTouched = p => p.units.filter(u => lvOf(u.code) > 0).length;
   const distBar = arr => { const n = arr.length; const c = [0, 0, 0, 0, 0, 0]; arr.forEach(u => c[lvOf(u.code)]++); return [5, 4, 3, 2, 1].map(v => `<i style="width:${c[v] / n * 100}%;background:${color(v)}"></i>`).join(''); };
 
@@ -842,6 +983,7 @@
     </li>`;
   }
   function refreshUnitRow(code) {
+    if (code[0] === 'P') return;
     const row = tree.querySelector(`.unit-row[data-code="${code}"]`);
     if (!row) return;
     const v = lvOf(code);
@@ -899,20 +1041,20 @@
     b.innerHTML = ''; const pre = document.createElement('div'); pre.textContent = t; const x = document.createElement('button'); x.textContent = '닫기'; x.style.cssText = 'margin-top:8px;padding:6px 12px'; x.onclick = () => b.remove(); b.appendChild(pre); b.appendChild(x);
   };
   function loadLocal() {
-    try { const raw = localStorage.getItem(LS_KEY); if (raw) { const o = JSON.parse(raw); if (o && o.levels) { levels = o.levels; ach = o.ach || {}; log = Array.isArray(o.log) ? o.log : []; visits = normVisits(o.visits || o.dates); notes = (o.notes && typeof o.notes === 'object') ? o.notes : {}; updatedAt = o.updatedAt || 0; } } } catch (e) { /* storage unavailable */ }
+    try { const raw = localStorage.getItem(LS_KEY); if (raw) { const o = JSON.parse(raw); if (o && o.levels) { levels = o.levels; plevels = normP(o.plevels); ach = o.ach || {}; log = Array.isArray(o.log) ? o.log : []; visits = normVisits(o.visits || o.dates); notes = (o.notes && typeof o.notes === 'object') ? o.notes : {}; updatedAt = o.updatedAt || 0; } } } catch (e) { /* storage unavailable */ }
   }
-  function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify({ levels, ach, log, visits, notes, updatedAt })); } catch (e) { /* ignore */ } }
+  function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify({ levels, plevels, ach, log, visits, notes, updatedAt })); } catch (e) { /* ignore */ } }
   function applyRemote(data) {
     if (!data || !data.levels) return;
     if ((data.updatedAt || 0) <= updatedAt) return;
-    levels = { ...data.levels }; updatedAt = data.updatedAt || Date.now();
+    levels = { ...data.levels }; plevels = normP(data.plevels); updatedAt = data.updatedAt || Date.now();
     Object.entries(data.ach || {}).forEach(([k, t]) => { if (!ach[k] || t < ach[k]) ach[k] = t; });
     if (Array.isArray(data.log)) log = data.log; if (data.visits || data.dates) visits = normVisits(data.visits || data.dates); if (data.notes && typeof data.notes === 'object') notes = { ...data.notes };
     saveLocal(); repaintAll();
     setStatus('다른 기기에서 저장한 기록을 불러왔어요');
   }
   function repaintAll() {
-    unitSel.attr('fill', u => color(lvOf(u.code)));
+    paintMap();
     if (typeof checkAchievements === 'function') checkAchievements(false);
     renderStats();
     prefs.forEach(p => renderPrefRow(p.code));
@@ -928,7 +1070,7 @@
     if (writing || !dirty || !dbDoc) return;
     writing = true; dirty = false;
     try {
-      await dbDoc.set({ levels, ach, log, visits, notes, updatedAt });
+      await dbDoc.set({ levels, plevels, ach, log, visits, notes, updatedAt });
       setStatus('저장됨 · ' + new Date(updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
     } catch (e) { setStatus('클라우드 저장 실패 — 이 브라우저에는 저장됨'); dirty = true; }
     finally { writing = false; if (dirty) saveTimer = setTimeout(flush, 1500); }
@@ -1130,7 +1272,7 @@
   }
 
   // export / import / reset
-  const exportJSON = () => JSON.stringify({ format: 'cheese', version: 4, updatedAt, levels, ach, log, visits, notes });
+  const exportJSON = () => JSON.stringify({ format: 'cheese', version: 5, updatedAt, levels, plevels, ach, log, visits, notes });
   document.getElementById('btn-export').addEventListener('click', async () => {
     const data = exportJSON();
     if (downloads) { try { await downloads.save({ filename: 'cheese.json', data }); setStatus('내보내기 완료'); return; } catch (e) { /* fall through */ } }
@@ -1145,8 +1287,8 @@
   function importObject(o) {
     if (!o || !o.levels || typeof o.levels !== 'object') throw new Error('bad');
     const next = {};
-    Object.entries(o.levels).forEach(([c, v]) => { if (unitByCode.has(c) && v >= 1 && v <= 5) next[c] = +v; });
-    levels = next; if (o.ach && typeof o.ach === 'object') ach = { ...o.ach }; if (Array.isArray(o.log)) log = o.log.slice(-500); if (o.visits || o.dates) visits = normVisits(o.visits || o.dates); if (o.notes && typeof o.notes === 'object') notes = { ...o.notes }; updatedAt = Date.now();
+    Object.entries(o.levels).forEach(([c, v]) => { if (unitByCode.has(c) && c[0] !== 'P' && v >= 1 && v <= 5) next[c] = +v; });
+    levels = next; plevels = normP(o.plevels); if (o.ach && typeof o.ach === 'object') ach = { ...o.ach }; if (Array.isArray(o.log)) log = o.log.slice(-500); if (o.visits || o.dates) visits = normVisits(o.visits || o.dates); if (o.notes && typeof o.notes === 'object') notes = { ...o.notes }; updatedAt = Date.now();
     repaintAll(); persist();
     setStatus(`가져오기 완료 · ${Object.keys(next).length}곳`);
   }
@@ -1273,15 +1415,15 @@
   [['s1','🌙','하룻밤 숙성','숙박 1곳',1],['s10','📅','한 달 숙성','숙박 10곳',10],['s50','🗓️','1년 숙성','숙박 50곳',50],['s100','🍷','빈티지','숙박 100곳',100]]
     .forEach(([id,ic,n,d,t]) => add(id,ic,n,d,'숙성',() => [stayed(), t]));
   add('home','🏠','원산지 표시','거주 1곳 이상','숙성',() => [cnt(units,5), 1]);
-  add('p47','🍽️','치즈 플래터 47','47개 도도부현 모두 기록','도도부현',() => [prefs.filter(p => lvMax(p.units) >= 1).length, 47]);
-  add('p47s','🍴','풀 코스','47개 도도부현 모두 체류 이상','도도부현',() => [prefs.filter(p => lvMax(p.units) >= 3).length, 47]);
-  add('p47n','🛏️','47박','47개 도도부현 모두 숙박 이상','도도부현',() => [prefs.filter(p => lvMax(p.units) >= 4).length, 47]);
-  add('pt100','💯','백 점','도도부현 점수 100점','도도부현',() => [prefs.reduce((a,p)=>a+lvMax(p.units),0), 100]);
-  add('pt200','🎯','이백 점','도도부현 점수 200점','도도부현',() => [prefs.reduce((a,p)=>a+lvMax(p.units),0), 200]);
-  add('pt235','🥇','그랑 크뤼','도도부현 점수 만점 235','도도부현',() => [prefs.reduce((a,p)=>a+lvMax(p.units),0), 235]);
+  add('p47','🍽️','치즈 플래터 47','47개 도도부현 모두 기록','도도부현',() => [prefs.filter(p => prefLevel(p) >= 1).length, 47]);
+  add('p47s','🍴','풀 코스','47개 도도부현 모두 체류 이상','도도부현',() => [prefs.filter(p => prefLevel(p) >= 3).length, 47]);
+  add('p47n','🛏️','47박','47개 도도부현 모두 숙박 이상','도도부현',() => [prefs.filter(p => prefLevel(p) >= 4).length, 47]);
+  add('pt100','💯','백 점','도도부현 점수 100점','도도부현',() => [prefs.reduce((a,p)=>a+prefLevel(p),0), 100]);
+  add('pt200','🎯','이백 점','도도부현 점수 200점','도도부현',() => [prefs.reduce((a,p)=>a+prefLevel(p),0), 200]);
+  add('pt235','🥇','그랑 크뤼','도도부현 점수 만점 235','도도부현',() => [prefs.reduce((a,p)=>a+prefLevel(p),0), 235]);
   REGIONS.forEach(([name, codes]) => {
     const regUnits = () => codes.flatMap(c => prefOf(c).units);
-    if (codes.length > 1) add('r'+codes.join(''), '🍽️', name+' 플래터', name+' 지방의 모든 현에서 체류 이상', '지방', () => [codes.filter(c => lvMax(prefOf(c).units) >= 3).length, codes.length]);
+    if (codes.length > 1) add('r'+codes.join(''), '🍽️', name+' 플래터', name+' 지방의 모든 현에서 체류 이상', '지방', () => [codes.filter(c => prefLevel(prefOf(c)) >= 3).length, codes.length]);
     add('rc'+codes.join(''), '🏁', name+' 제패', name+' 지방의 모든 시구정촌 방문(경유 이상)', '지방', () => [cnt(regUnits(), 2), regUnits().length]);
   });
   add('ends','🧭','동서남북 끝','최북단·최동단·최남단·최서단 시정촌에 발 딛기','특별',() => [EXTREMES.filter(([c]) => lvOf(c) >= 2).length, 4]);
@@ -1290,8 +1432,8 @@
   add('big20','🏙️','빅 시티 20','정령지정도시 20곳 모두 체류 이상','특별',() => [bigCities.filter(c => lvMax(cityUnits(c)) >= 3).length, bigCities.length]);
   add('wards','🔍','구석구석','정령시 한 곳의 모든 구에서 체류 이상','특별',() => [bigCities.some(c => cityUnits(c).every(u => lvOf(u.code) >= 3)) ? 1 : 0, 1]);
   add('islands','⛴️','바다 건너 치즈','낙도 5곳 체류 이상','특별',() => [ISLANDS.filter(c => lvOf(c) >= 3).length, 5]);
-  add('ns','🧊','북쪽 끝에서 남쪽 끝까지','홋카이도와 오키나와 양쪽에서 체류 이상','특별',() => [(lvMax(prefOf('01').units) >= 3 ? 1 : 0) + (lvMax(prefOf('47').units) >= 3 ? 1 : 0), 2]);
-  add('honshu','🚄','혼슈 종단','아오모리현과 야마구치현 양쪽에서 체류 이상','특별',() => [(lvMax(prefOf('02').units) >= 3 ? 1 : 0) + (lvMax(prefOf('35').units) >= 3 ? 1 : 0), 2]);
+  add('ns','🧊','북쪽 끝에서 남쪽 끝까지','홋카이도와 오키나와 양쪽에서 체류 이상','특별',() => [(prefLevel(prefOf('01')) >= 3 ? 1 : 0) + (prefLevel(prefOf('47')) >= 3 ? 1 : 0), 2]);
+  add('honshu','🚄','혼슈 종단','아오모리현과 야마구치현 양쪽에서 체류 이상','특별',() => [(prefLevel(prefOf('02')) >= 3 ? 1 : 0) + (prefLevel(prefOf('35')) >= 3 ? 1 : 0), 2]);
   // per-prefecture completion (all municipalities visited)
   const prefDone = p => cnt(p.units, 2) >= p.units.length;
 
@@ -1390,6 +1532,7 @@
 
   // ---------- boot ----------
   loadLocal();
+  try { if (localStorage.getItem('cheese-mapmode') === 'pref') setMapMode('pref'); } catch (e) { /* ignore */ }
   renderTree();
   repaintAll();
   setStatus(Object.keys(levels).length ? '이 브라우저에 저장됨' : '지도를 클릭해 칠해 보세요');
