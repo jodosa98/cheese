@@ -288,11 +288,11 @@
   .p-date input { flex: 1; min-width: 0; border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 6px; font-size: 12px; background: var(--panel); }
   .p-date .btn { padding: 3px 8px; font-size: 11px; }
   .unit-row .nm .dt { color: var(--accent); }
-  #logv { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; }
-  #logv .box { background: var(--panel); color: var(--ink); border-radius: 10px; max-width: 560px; width: 100%; max-height: 92%; overflow: auto; padding: 20px 22px; box-shadow: var(--shadow); position: relative; }
-  #logv h2 { font-family: "Shippori Mincho B1", serif; font-size: 20px; margin: 0 0 2px; }
+  #logv, #acct { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; }
+  #logv .box, #acct .box { background: var(--panel); color: var(--ink); border-radius: 10px; max-width: 560px; width: 100%; max-height: 92%; overflow: auto; padding: 20px 22px; box-shadow: var(--shadow); position: relative; }
+  #logv h2, #acct h2 { font-family: "Shippori Mincho B1", serif; font-size: 20px; margin: 0 0 2px; }
   #logv .sum { font-size: 12px; color: var(--muted); margin: 0 0 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  #logv .close { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 20px; color: var(--muted); }
+  #logv .close, #acct .close { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 20px; color: var(--muted); }
   #logv h3 { font-size: 11px; letter-spacing: .08em; color: var(--muted); margin: 14px 0 4px; }
   .log-row { display: grid; grid-template-columns: 64px 1fr auto 22px; gap: 8px; align-items: center; padding: 5px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
   .log-row .tm { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -348,6 +348,10 @@
     #toast { bottom: calc(var(--sheet, 50%) + 56px); }
   }
   @media (prefers-reduced-motion: reduce) { .pref-row .chev { transition: none; } }
+  #acct .box { max-width: 420px; }
+  #acct .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0; font-size: 13px; }
+  #acct .danger-zone { margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--ink-2); }
+  #acct input[type=text] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--line); border-radius: 6px; margin: 8px 0; font-size: 14px; }
 </style>
 
 <div id="app">
@@ -389,7 +393,7 @@
     <ul id="tree" aria-label="도도부현별 시구정촌"></ul>
 
     <div id="panel-foot">
-      <div id="cloud" hidden><span class="who" id="cloud-who">로그인하면 다른 기기와 기록이 동기화돼요</span><button class="btn primary" id="btn-login">Google로 로그인</button><button class="btn" id="btn-logout" hidden>로그아웃</button><button class="btn danger" id="btn-delete-account" hidden title="클라우드에 저장된 기록과 계정 연결을 지웁니다">계정 삭제</button></div>
+      <div id="cloud" hidden><span class="who" id="cloud-who">로그인하면 다른 기기와 기록이 동기화돼요</span><button class="btn primary" id="btn-login">Google로 로그인</button><button class="btn" id="btn-acct" hidden>계정 관리</button></div>
       <div id="status">불러오는 중…</div>
       <button class="btn" id="btn-export">내보내기</button>
       <button class="btn" id="btn-import">가져오기</button>
@@ -473,6 +477,19 @@
     <h2 id="logv-title">변경 기록</h2>
     <p class="sum"><span id="logv-sum"></span><button class="btn" id="btn-undo-log">마지막 변경 되돌리기</button><button class="btn danger" id="btn-log-clear">기록 모두 지우기</button></p>
     <div id="logv-body"></div>
+  </div>
+</div>
+<div id="acct" hidden role="dialog" aria-modal="true" aria-labelledby="acct-title">
+  <div class="box">
+    <button class="close" id="acct-close" aria-label="닫기">×</button>
+    <h2 id="acct-title">계정 관리</h2>
+    <div class="row"><span id="acct-who"></span></div>
+    <div class="row"><button class="btn" id="btn-logout">로그아웃</button><span style="color:var(--ink-2)">이 기기의 기록은 그대로 남고, 클라우드 동기화만 멈춰요.</span></div>
+    <div class="danger-zone">
+      <b>계정 삭제</b> — 클라우드에 저장된 기록과 계정 연결을 완전히 지웁니다. 되돌릴 수 없어요. (이 기기에 남은 기록은 지워지지 않습니다.)
+      <input type="text" id="acct-confirm" placeholder="삭제하려면 여기에  삭제  라고 입력" autocomplete="off">
+      <button class="btn danger" id="btn-delete-account" disabled>계정 삭제</button>
+    </div>
   </div>
 </div>
 <div id="undo" hidden></div>
@@ -944,6 +961,9 @@
       let gisClient = null;
       btnIn.addEventListener('click', async () => {
         if (FA) {
+          const NATIVE_FAIL_KEY = 'cheese-native-login-failed';
+          let nativeFailed = false; try { nativeFailed = !!localStorage.getItem(NATIVE_FAIL_KEY); } catch (e) { /* ignore */ }
+          if (nativeFailed && cfg.siteUrl) { openBrowserLogin(); return; }
           try {
             let r;
             try { r = await FA.signInWithGoogle({ skipNativeAuth: true }); }
@@ -957,7 +977,7 @@
             try { await auth.signInWithCredential(a, auth.GoogleAuthProvider.credential(idToken)); } catch (e) { e.step = '3-firebase'; throw e; }
           } catch (e) {
             // 폰의 Google 로그인 부품이 실패하면 → 폰 브라우저(Chrome)에서 웹사이트로 로그인한 뒤 앱으로 돌아오는 방식
-            if (cfg.siteUrl) { setStatus('브라우저에서 Google 로그인을 진행해요…'); location.href = cfg.siteUrl + '?applogin=1'; return; }
+            if (cfg.siteUrl) { try { localStorage.setItem(NATIVE_FAIL_KEY, '1'); } catch (e2) { /* ignore */ } openBrowserLogin(); return; }
             let m; try { m = JSON.stringify(e, Object.getOwnPropertyNames(e || {})); } catch (e2) { m = String(e); }
             showErr('Google 로그인 실패\n' + (e && (e.code || '')) + ' ' + (e && (e.message || e.errorMessage) || '') + '\n' + m);
           }
@@ -970,11 +990,20 @@
         try { await auth.signInWithPopup(a, provider); }
         catch (e) { setStatus('로그인에 실패했어요 — 팝업이 차단되었는지 확인하고 다시 시도해 주세요'); }
       });
+      // APK: 앱 안 브라우저 탭(Chrome Custom Tab)에서 웹사이트 로그인 → cheese://login 으로 복귀
+      const BR = isNative && window.Capacitor.nativePromise ? (m, o) => window.Capacitor.nativePromise('Browser', m, o || {}) : null;
+      const openBrowserLogin = () => {
+        setStatus('Google 로그인 창을 여는 중…');
+        const url = cfg.siteUrl + '?applogin=1';
+        if (BR) BR('open', { url, presentationStyle: 'popover' }).catch(() => { location.href = url; });
+        else location.href = url;
+      };
       // APK: 브라우저 로그인 후 cheese://login#at=... 로 돌아오면 그 토큰으로 로그인
       const handleAppUrl = async url => {
         try {
           const m = /[#?&]at=([^&#]+)/.exec(url || '');
           if (!m) return;
+          if (BR) BR('close').catch(() => {});
           await auth.signInWithCredential(a, auth.GoogleAuthProvider.credential(null, decodeURIComponent(m[1])));
         } catch (e) { showErr('브라우저 로그인 결과를 앱에 적용하지 못했어요\n' + (e && (e.code || e.message) || e)); }
       };
@@ -1018,12 +1047,17 @@
         document.body.appendChild(box);
         document.getElementById('applogin-go').addEventListener('click', () => { if (gisClient) gisClient.requestAccessToken({ prompt: 'select_account' }); else box.querySelector('p').textContent = '로그인 부품을 불러오지 못했어요. 새로고침해 주세요.'; });
       }
-      btnOut.addEventListener('click', async () => { try { if (FA) await FA.signOut(); } catch (e) { /* ignore */ } auth.signOut(a); });
+      btnOut.addEventListener('click', async () => { acct.hidden = true; try { if (FA) await FA.signOut(); } catch (e) { /* ignore */ } auth.signOut(a); });
       const btnDel = document.getElementById('btn-delete-account');
-      let delArmed = false, delTimer = null;
+      const acct = document.getElementById('acct'), acctWho = document.getElementById('acct-who'), acctConfirm = document.getElementById('acct-confirm');
+      const btnAcct = document.getElementById('btn-acct');
+      btnAcct.addEventListener('click', () => { acctConfirm.value = ''; btnDel.disabled = true; acct.hidden = false; });
+      document.getElementById('acct-close').addEventListener('click', () => { acct.hidden = true; });
+      acct.addEventListener('click', ev => { if (ev.target === acct) acct.hidden = true; });
+      acctConfirm.addEventListener('input', () => { btnDel.disabled = acctConfirm.value.trim() !== '삭제'; });
       btnDel.addEventListener('click', async () => {
-        if (!delArmed) { delArmed = true; btnDel.textContent = '정말 삭제? 다시 누르면 실행'; delTimer = setTimeout(() => { delArmed = false; btnDel.textContent = '계정 삭제'; }, 5000); return; }
-        clearTimeout(delTimer); delArmed = false; btnDel.textContent = '계정 삭제';
+        if (acctConfirm.value.trim() !== '삭제') return;
+        acct.hidden = true;
         const user = a.currentUser; if (!user) return;
         try {
           if (unsub) { unsub(); unsub = null; }
@@ -1046,12 +1080,12 @@
         if (unsub) { unsub(); unsub = null; }
         if (firstAuth) { firstAuth = false; let seen = false; try { seen = !!localStorage.getItem(WELCOME_KEY); } catch (e) { /* ignore */ } if (!user && !seen) welcome.hidden = false; }
         if (!user) {
-          dbDoc = null; btnIn.hidden = false; btnOut.hidden = true; btnDel.hidden = true;
+          dbDoc = null; btnIn.hidden = false; btnAcct.hidden = true; acct.hidden = true;
           who.textContent = '로그인하면 다른 기기와 기록이 동기화돼요';
           setStatus(Object.keys(levels).length ? '이 브라우저에 저장됨' : '지도를 클릭해 칠해 보세요');
           return;
         }
-        btnIn.hidden = true; btnOut.hidden = false; btnDel.hidden = false;
+        btnIn.hidden = true; btnAcct.hidden = false; acctWho.textContent = (user.displayName || '') + ' · ' + (user.email || '');
         who.textContent = (user.displayName || user.email || '로그인됨') + ' · 동기화 중';
         const ref = fs.doc(d, 'users', user.uid, 'data', 'main');
         const wrapSnap = snap => ({ exists: snap.exists(), data: () => snap.data(), metadata: { hasPendingWrites: snap.metadata.hasPendingWrites } });
