@@ -930,7 +930,13 @@
       const provider = new auth.GoogleAuthProvider();
       let unsub = null;
       const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-      const FA = isNative && window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin('FirebaseAuthentication') : null;
+      // APK: Capacitor 네이티브 브리지에는 registerPlugin이 없으므로 nativePromise로 직접 호출
+      let FA = null;
+      if (isNative) {
+        const C = window.Capacitor;
+        if (C.registerPlugin) FA = C.registerPlugin('FirebaseAuthentication');
+        else if (C.nativePromise) FA = { signInWithGoogle: o => C.nativePromise('FirebaseAuthentication', 'signInWithGoogle', o || {}), signOut: () => C.nativePromise('FirebaseAuthentication', 'signOut', {}) };
+      }
       let gisClient = null;
       btnIn.addEventListener('click', async () => {
         if (FA) {
@@ -939,7 +945,7 @@
             const idToken = r && r.credential && r.credential.idToken;
             if (!idToken) throw new Error('no token');
             await auth.signInWithCredential(a, auth.GoogleAuthProvider.credential(idToken));
-          } catch (e) { setStatus('Google 로그인에 실패했어요 — 앱에 Firebase 설정이 아직 없거나 취소되었어요'); }
+          } catch (e) { setStatus('Google 로그인에 실패했어요: ' + ((e && (e.message || e.errorMessage)) || e || '취소됨')); }
           return;
         }
         // 웹: Google Identity Services(토큰 방식) 우선 — GitHub Pages처럼 authDomain과 다른 도메인에서도 폰 브라우저에서 동작
