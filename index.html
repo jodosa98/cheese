@@ -88,7 +88,12 @@
   .dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0,0,0,.2); flex: none; display: inline-block; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-  #app { height: 100%; display: grid; grid-template-columns: 370px 1fr; }
+  #app { height: 100%; display: grid; grid-template-columns: 370px 1fr; transition: grid-template-columns .25s ease; }
+  #app.panel-hidden { grid-template-columns: 0px 1fr; }
+  #app.panel-hidden #panel { overflow: hidden; border-right: 0; }
+  #panel-toggle { position: absolute; left: 0; top: 50%; transform: translateY(-50%); z-index: 5; width: 22px; height: 64px; border: 1px solid var(--line-strong); border-left: 0; border-radius: 0 8px 8px 0; background: var(--panel); color: var(--ink-2); font-size: 12px; padding: 0; box-shadow: var(--shadow); }
+  #panel-toggle:hover { color: var(--ink); }
+  #app.panel-hidden #panel-toggle { width: 26px; }
 
   /* ---------- panel ---------- */
   #panel { display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); min-height: 0; }
@@ -153,6 +158,12 @@
   #sov #search-results .rd { font-size: 12px; }
 
   /* prefecture tree */
+  #tree-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 20px; font-size: 12px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+  #tree-tools .chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  #tree-tools-note { color: var(--muted); font-size: 11px; }
+  #tree.visited-only > li[data-v="0"] { display: none; }
+  #tree.visited-only .unit-row[data-v="0"] { display: none; }
+  #tree.visited-only li:has(> .grp):not(:has(.unit-row:not([data-v="0"]))) { display: none; }
   #tree { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 4px 10px 10px; list-style: none; }
   #tree > li { margin: 0; border-bottom: 1px solid var(--line); }
   #tree > li:last-child { border-bottom: 0; }
@@ -343,6 +354,7 @@
   #handle { display: none; }
   @media (max-width: 760px) {
     #app { display: block; position: relative; }
+    #panel-toggle { display: none; }
     #map-wrap { position: absolute; inset: 0; bottom: calc(var(--sheet, 50%) - 16px); transition: bottom .28s cubic-bezier(.2,.8,.2,1); }
     #app.dragging #map-wrap { transition: none; }
     #panel {
@@ -440,6 +452,7 @@
       <ul id="search-results" hidden></ul>
     </div>
 
+    <div id="tree-tools"><label class="chk"><input type="checkbox" id="visited-only"> 다녀온 곳만 보기</label><span id="tree-tools-note"></span></div>
     <ul id="tree" aria-label="도도부현별 시구정촌"></ul>
 
     <div id="panel-foot">
@@ -454,6 +467,7 @@
   </aside>
 
   <div id="map-wrap">
+    <button id="panel-toggle" title="목록 접기/펼치기" aria-label="목록 접기/펼치기" aria-expanded="true">◀</button>
     <svg id="map" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet" role="img" aria-label="일본 시구정촌 방문 지도"></svg>
     <div id="mode" role="group" aria-label="지도 종류"><button data-m="muni" aria-pressed="true">시구정촌</button><button data-m="pref" aria-pressed="false">도도부현</button></div>
     <div id="map-ctl">
@@ -780,6 +794,14 @@
   btnLab.setAttribute('aria-pressed', labelsOn ? 'true' : 'false');
   btnLab.addEventListener('click', () => { labelsOn = !labelsOn; btnLab.setAttribute('aria-pressed', labelsOn ? 'true' : 'false'); try { localStorage.setItem('cheese-labels', labelsOn ? '1' : '0'); } catch (e) { /* ignore */ } scheduleLabels(); });
   window.addEventListener('resize', scheduleLabels);
+  // 넓은 화면: 왼쪽 목록 접기/펼치기
+  (function () {
+    const app = document.getElementById('app'), tg = document.getElementById('panel-toggle');
+    let hidden = false; try { hidden = localStorage.getItem('cheese-panel') === 'hidden'; } catch (e) { /* ignore */ }
+    const apply = () => { app.classList.toggle('panel-hidden', hidden); tg.textContent = hidden ? '▶' : '◀'; tg.setAttribute('aria-expanded', String(!hidden)); setTimeout(scheduleLabels, 280); };
+    tg.addEventListener('click', () => { hidden = !hidden; try { localStorage.setItem('cheese-panel', hidden ? 'hidden' : 'shown'); } catch (e) { /* ignore */ } apply(); });
+    apply();
+  })();
   // ---------- 환경설정 ----------
   const settingsEl = document.getElementById('settings');
   const setSeg = (id, v) => document.querySelectorAll('#' + id + ' button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === String(v)));
@@ -1002,6 +1024,7 @@
   const distBar = arr => { const n = arr.length; const c = [0, 0, 0, 0, 0, 0]; arr.forEach(u => c[lvOf(u.code)]++); return [5, 4, 3, 2, 1].map(v => `<i style="width:${c[v] / n * 100}%;background:${color(v)}"></i>`).join(''); };
 
   function renderStats() {
+    if (window.__applyVisitedOnly) window.__applyVisitedOnly();
     const prefSum = prefs.reduce((s, p) => s + prefLevel(p), 0);
     let muniSum = 0, visited = 0;
     units.forEach(u => { const v = lvOf(u.code); muniSum += v; if (v) visited++; });
@@ -1016,6 +1039,13 @@
   // ---------- prefecture tree ----------
   const tree = document.getElementById('tree');
   const expanded = new Set();
+  (function () {
+    const cb = document.getElementById('visited-only'), note = document.getElementById('tree-tools-note');
+    let on = false; try { on = localStorage.getItem('cheese-visited-only') === '1'; } catch (e) { /* ignore */ }
+    const apply = () => { cb.checked = on; tree.classList.toggle('visited-only', on); note.textContent = on ? `${prefs.filter(p => prefLevel(p) > 0).length}개 현 · ${units.filter(u => lvOf(u.code) > 0).length}곳` : ''; };
+    cb.addEventListener('change', () => { on = cb.checked; try { localStorage.setItem('cheese-visited-only', on ? '1' : '0'); } catch (e) { /* ignore */ } apply(); });
+    window.__applyVisitedOnly = apply; apply();
+  })();
   function renderTree() {
     tree.innerHTML = prefs.map(p => `<li data-pref="${p.code}" aria-expanded="false"><button class="pref-row" aria-controls="sub-${p.code}"></button><ul class="sub" id="sub-${p.code}" hidden></ul></li>`).join('');
     prefs.forEach(p => renderPrefRow(p.code));
@@ -1033,6 +1063,7 @@
     const b = tree.querySelector(`li[data-pref="${code}"] > .pref-row`);
     if (!b) return;
     const v = prefLevel(p);
+    b.parentElement.dataset.v = v;
     b.innerHTML = `<i class="dot" style="background:${color(v)}"></i>
       <span class="name"><span class="code">${p.code}</span><span class="ja">${p.name}</span><span class="kr">${p.kr} · ${p.en}</span></span>
       <span class="lv">${v} ${byLevel[v].kr}</span>
@@ -1064,7 +1095,7 @@
   }
   function unitRowHTML(u) {
     const v = lvOf(u.code);
-    return `<li class="unit-row" data-code="${u.code}">
+    return `<li class="unit-row" data-code="${u.code}" data-v="${v}">
       <i class="dot" style="background:${color(v)}"></i>
       <button class="nm" data-code="${u.code}" title="지도에서 보기"><span class="ja">${u.name}</span><span class="rd">${u.rdShort}</span>${lastVisit(u.code) ? `<span class="rd dt">📅 ${fmtV(lastVisit(u.code))}${visitsOf(u.code).length > 1 ? ` +${visitsOf(u.code).length - 1}` : ''}</span>` : ''}${notes[u.code] ? `<span class="rd" title="${notes[u.code].replace(/"/g, '&quot;')}">📝</span>` : ''}</button>
       <span class="mini">${[5, 4, 3, 2, 1, 0].map(l => `<button data-v="${l}" aria-pressed="${l === v}" style="background:${color(l)}" title="${byLevel[l].kr}">${l}</button>`).join('')}</span>
@@ -1075,7 +1106,7 @@
     const row = tree.querySelector(`.unit-row[data-code="${code}"]`);
     if (!row) return;
     const v = lvOf(code);
-    row.querySelector('.dot').style.background = color(v);
+    row.querySelector('.dot').style.background = color(v); row.dataset.v = v;
     row.querySelectorAll('.mini button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.v === v));
   }
   function refreshOpenSubs() { expanded.forEach(code => renderSub(prefs.find(p => p.code === code))); }
