@@ -21,6 +21,13 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
 <style>
   [hidden] { display: none !important; }
+  /* 화면 가장자리 안전 여백 (상태바·내비게이션 바·노치). PC·구형 폰에서는 모두 0 → 화면 변화 없음 */
+  :root {
+    --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+    --sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  }
   :root {
     --ground: #edf0e9;
     --panel: #f9faf7;
@@ -104,7 +111,7 @@
   #app.panel-hidden #panel-toggle { width: 26px; }
 
   /* ---------- panel ---------- */
-  #panel { display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); min-height: 0; }
+  #panel { display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); min-height: 0; padding-top: var(--sat); padding-left: var(--sal); }
   #panel-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); }
   .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .eyebrow { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 2px; }
@@ -154,11 +161,11 @@
   #search-results .pref { color: var(--muted); font-size: 11px; margin-left: auto; white-space: nowrap; }
 
   /* 폰 전용 검색 화면 */
-  #sov { position: fixed; inset: 0; z-index: 65; background: var(--panel); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
+  #sov { position: fixed; inset: 0; z-index: 65; background: var(--panel); display: flex; flex-direction: column; padding-top: var(--sat); }
   .sov-head { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
   .sov-back { width: 36px; height: 36px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; font-size: 18px; }
   .sov-slot { flex: 1; }
-  .sov-body { flex: 1; overflow: auto; padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 80px); }
+  .sov-body { flex: 1; overflow: auto; padding: 8px 12px calc(var(--sab) + 80px); }
   .sov-hint { font-size: 12px; color: var(--muted); margin: 8px 4px; }
   #sov #search-results { position: static; box-shadow: none; border: 0; max-height: none; padding: 0; }
   #sov #search-results li { border-bottom: 1px solid var(--line); }
@@ -210,7 +217,7 @@
   .mini button[aria-pressed="true"] { opacity: 1; box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--ink); }
 
   /* footer */
-  #panel-foot { border-top: 1px solid var(--line); padding: 8px 20px 10px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+  #panel-foot { border-top: 1px solid var(--line); padding: 8px 20px calc(10px + var(--sab)); display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
   #status { font-size: 11px; color: var(--muted); width: 100%; }
   #cloud { width: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; padding: 6px 8px; background: var(--panel-2); border-radius: 6px; }
   #cloud .who { color: var(--ink-2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -265,14 +272,14 @@
   #pop .p-row .sw { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(0,0,0,.18); }
   #pop .p-close { position: absolute; top: 4px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 4px; }
 
-  #mode { position: absolute; left: 12px; top: 12px; z-index: 4; display: flex; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel); overflow: hidden; font-size: 12px; }
+  #mode { position: absolute; left: 12px; top: calc(12px + var(--sat)); z-index: 4; display: flex; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel); overflow: hidden; font-size: 12px; }
   #mode button { border: 0; background: none; padding: 6px 11px; color: var(--ink-2); }
   #mode button[aria-pressed="true"] { background: var(--ink); color: #fff; }
   #map.pref-mode .unit { stroke-width: 0; }
   #map.pref-mode .pref-mesh { stroke-width: 1.4px; }
   #brush-hint { font-size: 11px; color: var(--muted); width: 100%; }
   #brush-hint:empty { display: none; }
-  #map-ctl { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 4px; z-index: 4; }
+  #map-ctl { position: absolute; right: calc(12px + var(--sar)); top: calc(12px + var(--sat)); display: flex; flex-direction: column; gap: 4px; z-index: 4; }
   #map-ctl button { width: 32px; height: 32px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; font-size: 16px; line-height: 1; }
   #legend {
     position: absolute; left: 12px; bottom: 12px; background: color-mix(in srgb, var(--panel) 88%, transparent);
@@ -281,7 +288,7 @@
   #legend span { display: inline-flex; align-items: center; gap: 4px; }
 
   /* info dialog */
-  #info { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; }
+  #info { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal)); }
   #info .box { background: var(--panel); color: var(--ink); border-radius: 10px; max-width: 560px; width: 100%; max-height: 90%; overflow: auto; padding: 22px 24px; box-shadow: var(--shadow); position: relative; }
   #info h2 { font-family: "Shippori Mincho B1", serif; font-size: 20px; margin: 0 0 6px; }
   #info h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 18px 0 6px; }
@@ -297,7 +304,7 @@
   .head-btns { display: flex; gap: 6px; flex: none; }
   .icon-btn.ach-btn { width: auto; padding: 0 9px 0 7px; border-radius: 15px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
   .icon-btn.ach-btn b { font-size: 11px; font-variant-numeric: tabular-nums; }
-  #achv { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; }
+  #achv { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal)); }
   #achv .box { background: var(--panel); color: var(--ink); border-radius: 10px; max-width: 640px; width: 100%; max-height: 92%; overflow: auto; padding: 20px 22px; box-shadow: var(--shadow); position: relative; }
   #achv h2 { font-family: "Shippori Mincho B1", serif; font-size: 20px; margin: 0 0 2px; }
   #achv .sum { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
@@ -316,13 +323,13 @@
   .ach-pref { display: flex; flex-wrap: wrap; gap: 4px; }
   .ach-pref span { font-size: 11px; padding: 2px 8px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
   .ach-pref span.on { background: #F2C94C; border-color: #D9A02A; color: #1c221d; font-weight: 700; }
-  #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60; background: var(--ink); color: var(--panel); padding: 10px 16px; border-radius: 10px; box-shadow: var(--shadow); font-size: 13px; display: flex; align-items: center; gap: 10px; max-width: 90vw; }
+  #toast { position: fixed; left: 50%; bottom: calc(24px + var(--sab)); transform: translateX(-50%); z-index: 60; background: var(--ink); color: var(--panel); padding: 10px 16px; border-radius: 10px; box-shadow: var(--shadow); font-size: 13px; display: flex; align-items: center; gap: 10px; max-width: 90vw; }
   #toast .ic { font-size: 22px; }
   #toast b { display: block; }
   #toast small { color: var(--line-strong); }
   .unit.changed { animation: chg 2.6s ease-out forwards; }
   @keyframes chg { 0% { stroke: var(--ink); stroke-width: 4; } 60% { stroke: var(--ink); stroke-width: 3; } 100% { stroke: var(--land-border); stroke-width: .35; } }
-  #undo { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 59; background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong); padding: 6px 8px 6px 12px; border-radius: 20px; box-shadow: var(--shadow); font-size: 12px; display: flex; align-items: center; gap: 8px; max-width: 92vw; white-space: nowrap; }
+  #undo { position: fixed; left: 50%; bottom: calc(24px + var(--sab)); transform: translateX(-50%); z-index: 59; background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong); padding: 6px 8px 6px 12px; border-radius: 20px; box-shadow: var(--shadow); font-size: 12px; display: flex; align-items: center; gap: 8px; max-width: 92vw; white-space: nowrap; }
   #undo .chg { display: inline-flex; align-items: center; gap: 4px; }
   #undo .btn { padding: 3px 10px; border-radius: 14px; }
   #undo .x { border: 0; background: none; color: var(--muted); font-size: 14px; padding: 0 4px; }
@@ -338,7 +345,7 @@
   .p-date input { flex: 1; min-width: 0; border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 6px; font-size: 12px; background: var(--panel); }
   .p-date .btn { padding: 3px 8px; font-size: 11px; }
   .unit-row .nm .dt { color: var(--accent); }
-  #logv, #acct { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; }
+  #logv, #acct { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal)); }
   #logv .box, #acct .box { background: var(--panel); color: var(--ink); border-radius: 10px; max-width: 560px; width: 100%; max-height: 92%; overflow: auto; padding: 20px 22px; box-shadow: var(--shadow); position: relative; }
   #logv h2, #acct h2 { font-family: "Shippori Mincho B1", serif; font-size: 20px; margin: 0 0 2px; }
   .dtabs { display: flex; gap: 4px; margin: 6px 0 12px; border-bottom: 1px solid var(--line); }
@@ -382,7 +389,7 @@
   .log-row .del { border: 0; background: none; color: var(--muted); font-size: 14px; padding: 0; }
   .log-empty { color: var(--muted); font-size: 13px; padding: 16px 0; }
   .welcome-legal { font-size: 11px; color: var(--muted); margin: 14px 0 0; } .welcome-legal a { color: inherit; }
-  #guide { position: fixed; inset: 0; z-index: 69; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 20px; }
+  #guide { position: fixed; inset: 0; z-index: 69; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: calc(20px + var(--sat)) calc(20px + var(--sar)) calc(20px + var(--sab)) calc(20px + var(--sal)); }
   #guide .card { background: var(--panel); color: var(--ink); border-radius: 14px; max-width: 380px; width: 100%; padding: 26px 24px 18px; box-shadow: var(--shadow); text-align: center; }
   #guide .g-ic { font-size: 40px; margin-bottom: 6px; }
   #guide h2 { font-family: "Shippori Mincho B1", serif; font-size: 19px; margin: 0 0 8px; }
@@ -391,7 +398,7 @@
   #guide .g-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
   #guide .g-dots i.on { background: var(--accent); }
   #guide .g-btns { display: flex; justify-content: space-between; gap: 8px; }
-  #welcome { position: fixed; inset: 0; z-index: 70; background: var(--ground); display: grid; place-items: center; padding: 24px; }
+  #welcome { position: fixed; inset: 0; z-index: 70; background: var(--ground); display: grid; place-items: center; padding: calc(24px + var(--sat)) calc(24px + var(--sar)) calc(24px + var(--sab)) calc(24px + var(--sal)); }
   #welcome .card { width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 28px 24px 22px; text-align: center; }
   #welcome .logo { width: 84px; height: 84px; border-radius: 22px; margin: 0 auto 12px; display: block; }
   #welcome h2 { font-family: "Shippori Mincho B1", serif; font-size: 28px; margin: 0; letter-spacing: .04em; }
@@ -410,7 +417,7 @@
     #app.dragging #map-wrap { transition: none; }
     #panel {
       position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
-      height: var(--sheet, 50%); max-height: 100%;
+      height: var(--sheet, 50%); max-height: calc(100% - var(--sat)); padding-top: 0;
       border-right: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0;
       box-shadow: 0 -6px 24px rgba(0,0,0,.18);
       transition: height .28s cubic-bezier(.2,.8,.2,1);
@@ -432,16 +439,13 @@
     .score .val { font-size: 22px; }
     #tree { flex: 1; min-height: 0; overflow: auto; }
     #legend { display: none; }
-    #map-ctl { top: env(safe-area-inset-top, 0px); margin-top: 12px; }
-    #mode { top: env(safe-area-inset-top, 0px); margin-top: 12px; }
     .brush-row { grid-template-columns: repeat(8, 1fr); }
-    #panel-foot { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
-    #undo { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 12px; transform: none; max-width: calc(100vw - 72px); }
+    #undo { bottom: auto; top: calc(var(--sat) + 12px); left: calc(12px + var(--sal)); transform: none; max-width: calc(100vw - 72px); }
     #toast { bottom: calc(var(--sheet, 50%) + 56px); }
   }
   @media (prefers-reduced-motion: reduce) { .pref-row .chev { transition: none; } }
   #acct .box { max-width: 420px; }
-  #settings { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; }
+  #settings { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal)); }
   #settings .box { background: var(--panel); color: var(--ink); border-radius: 10px; max-width: 480px; width: 100%; max-height: 92%; overflow: auto; padding: 20px 22px; box-shadow: var(--shadow); position: relative; }
   #settings h2 { font-family: "Shippori Mincho B1", serif; font-size: 20px; margin: 0 0 6px; }
   #settings .close { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 20px; color: var(--muted); }
